@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MQTT and WebSocket Interaction</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        h1, h2 { color: #333; }
+        #responseArea { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>MQTT and WebSocket Web Client</h1>
+
+    <h2>Shorten URL</h2>
+    <p>Enter a URL to shorten:</p>
+    <input type="text" id="urlInput" placeholder="Enter URL here">
+    <button onclick="sendUrl(false)">Shorten URL (Happy Path)</button>
+    <button onclick="sendUrl(true)">Shorten URL (Simulate No Acknowledgement from Websocket)</button>
+
+    <h2>Retrieve Original URL</h2>
+    <p>Enter the shortened URL code (<b>without http://localhost:3000</b>):</p>
+    <input type="text" id="codeInput" placeholder="Enter code here">
+    <button onclick="getOriginalUrl()">Get Original URL</button>
+
+    <h2>Responses</h2>
+    <div id="responseArea"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const clientId = localStorage.getItem('clientId') || `client_${new Date().getTime()}`;
+            localStorage.setItem('clientId', clientId);
+            const responseArea = document.getElementById('responseArea');
+            const retryCountToTextHHash = {'1': 'first', '2': 'second', '3': 'third'}
+
+            const ws = new WebSocket(`ws://localhost:3000/?clientId=${clientId}`);
+
+            ws.onopen = () => {
+                console.log('WebSocket connection established');
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                console.log(`[Received via WebSocket]:- Shortened URL is ${data.shortenedURL}`);
+                const attempts = data.retryCount ? ` (${retryCountToTextHHash[data.retryCount]} retry attempt)` : ''
+                responseArea.innerHTML += `<p>[Received via WebSocket${attempts}]:- Shortened URL is ${data.shortenedURL}</p>`;
+
+                if (!window.simulateNoAck) {
+                    // Send an acknowledgment only if not simulating no ACK
+                    ws.send(JSON.stringify({ type: 'ack', url: data.shortenedURL, clientId }));
+                }
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket connection closed');
+            };
+
+            const mqttClient = mqtt.connect('wss://test.mosquitto.org:8081/mqtt');
+
+            mqttClient.on('connect', function() {
+                console.log('Connected to MQTT broker via WebSockets.');
+                mqttClient.subscribe('url', function(err) {
+                    if (!err) {
+                        console.log('Successfully subscribed to "url" via MQTT.');
+                    } else {
+                        console.error('MQTT subscription error:', err);
+                    }
+                });
+            });
+
+            mqttClient.on('message', function(topic, message) {
+                const data = JSON.parse(message.toString());
+                console.log(`[Received via MQTT Protocol]:- Shortened URL is ${data.url}`);
+                responseArea.innerHTML += `<p>[Received via MQTT]:- Shortened URL is ${data.url}</p>`;
+            });
+
+            mqttClient.on('error', function(error) {
+                console.error('MQTT Connection Error:', error);
+            });
+
+            window.sendUrl = function(simulateNoAck) {
+                const urlInput = document.getElementById('urlInput');
+                const url = urlInput.value;
+                window.simulateNoAck = simulateNoAck; // Set the global variable based on the button clicked
+                
+                const requestUrl = `http://localhost:3000/url?url=${url}&clientId=${localStorage.getItem('clientId')}`;
+
+                fetch(requestUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                }).then(response => response.json())
+                  .then(data => {
+                    console.log('Request sent:', data);
+                  })
+                  .catch(error => {
+                    console.error('Error sending URL:', error);
+                  });
+            };
+
+            window.getOriginalUrl = function() {
+                const codeInput = document.getElementById('codeInput');
+                const code = codeInput.value;
+                fetch(`http://localhost:3000/${code}`, {
+                    method: 'GET',
+                }).then(response => response.json())
+                  .then(data => {
+                    if (data.url) {
+                        responseArea.innerHTML += `<p>[Received via HTTP]:- Original URL is ${data.url}</p>`;
+                    } else {
+                        console.log('Error:', data.error);
+                        responseArea.innerHTML += `<p>HTTP GET Error: ${data.error}</p>`;
+                    }
+                  })
+                  .catch(error => {
+                    console.error('Error fetching original URL:', error);
+                    responseArea.innerHTML += `<p>HTTP GET Error: ${error.toString()}</p>`;
+                  });
+            };
+        });
+    </script>
+</body>
+</html>
