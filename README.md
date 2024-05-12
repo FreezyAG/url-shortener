@@ -21,7 +21,7 @@ npm install express ws mqtt nodemailer cors
 To start the server, navigate to the project directory and run:
 
 ```bash
-node app.js
+npm start
 ```
 
 The server will listen on port 3000.

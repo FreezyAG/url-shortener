@@ -1,7 +1,7 @@
 import express, { Express, Request, Response } from 'express';
 import { createServer, Server } from 'http';
 import WebSocket, { WebSocketServer } from 'ws';
-import * as mqtt from 'mqtt';
+import { connect, MqttClient } from "mqtt"
 import nodemailer from 'nodemailer';
 import cors from 'cors';
 
@@ -13,7 +13,7 @@ const MQTT_BROKER_URL: string = 'mqtt://test.mosquitto.org:1883';
 const app: Express = express();
 const server: Server = createServer(app);
 const wss: WebSocketServer = new WebSocketServer({ server });
-const mqttClient: mqtt.MqttClient = mqtt.connect(MQTT_BROKER_URL);
+const mqttClient: MqttClient = connect(MQTT_BROKER_URL);
 const baseUrl: string = `http://localhost:${PORT}`;
 
 app.use(express.json());
