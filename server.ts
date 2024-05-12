@@ -10,7 +10,7 @@ const PORT: number = 3000;
 const MQTT_BROKER_URL: string = 'mqtt://test.mosquitto.org:1883';
 
 // App setup
-const app: Express = express();
+export const app: Express = express();
 const server: Server = createServer(app);
 const wss: WebSocketServer = new WebSocketServer({ server });
 const mqttClient: MqttClient = connect(MQTT_BROKER_URL);
